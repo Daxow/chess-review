@@ -732,7 +732,7 @@ body.grabbing,body.grabbing *{cursor:grabbing!important}
       <div class="phead"><span class="ttl"><span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#262522"/><g transform="translate(32 33) scale(.96) translate(-25 -26)"><path fill="#f2f1ef" d="M26.178 9.395c2.6.17 5.004.838 7.222 2.015 2.21 1.169 4.098 2.676 5.656 4.513 1.092 1.287 2.117 2.845 3.082 4.665a28.684 28.684 0 0 1 2.32 5.774 36.511 36.511 0 0 1 1.253 7.46c.177 2.599.262 5.012.262 7.23v5.402H15.468c-.153 0-.22-.407-.212-1.21.009-.814.06-1.466.16-1.965.06-.398.221-.957.467-1.685.254-.728.66-1.609 1.244-2.65.263-.534.89-1.304 1.88-2.32.999-1.016 2.133-2.201 3.429-3.539.745-.762 1.32-1.719 1.744-2.879.423-1.151.601-2.201.533-3.15a8.37 8.37 0 0 1-2.006 1.22c-3.505 1.253-6.045 3.073-7.612 5.452-.118.153-.49.822-1.117 2.015-.33.627-.618 1.059-.847 1.287-.313.314-.77.491-1.363.525-.923.043-1.643-.398-2.16-1.346-.693.203-1.312.288-1.862.254-.923-.347-1.592-.72-2.006-1.117-.847-.847-1.389-1.685-1.651-2.532a9.43 9.43 0 0 1-.381-2.726c0-1.389.855-3.226 2.582-5.512 2.015-2.625 3.09-4.631 3.217-6.003 0-.593.06-1.261.178-2.007a4.198 4.198 0 0 1 .618-1.49c.22-.33.364-.558.432-.677.076-.127.212-.313.415-.559.144-.203.27-.355.372-.457.093-.11.22-.254.373-.44.178-.212.406-.457.694-.745a18.06 18.06 0 0 1-1.067-7.46c3.285 1.169 6.054 3.015 8.28 5.53.551-1.872 1.626-3.387 3.226-4.539 1.321.923 2.371 2.15 3.15 3.666"/></g></svg></span>Chess Review</span></div>
       <div class="pscroll">
         <div class="sandbox">
-          <div class="status" id="sbStatus">Joue les deux camps directement sur l'échiquier.</div>
+          <div class="status" id="sbStatus">Trait aux Blancs</div>
           <div class="row2"><button class="cbtn" id="sbUndo" type="button"><svg class="sti" viewBox="0 0 24 24"><path d="M9 5 4 10l5 5"/><path d="M4.5 10H14a5.5 5.5 0 0 1 0 11h-3"/></svg>Annuler</button><button class="cbtn" id="sbReset" type="button"><svg class="sti" viewBox="0 0 24 24"><path d="M19.5 12.5A7.5 7.5 0 1 1 17.3 7"/><path d="M18.5 3v5h-5"/></svg>Réinitialiser</button></div>
           <button class="cbtn go" id="sbAnalyse" type="button" disabled><svg class="sti" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>Analyser cette partie</button>
         </div>
@@ -3128,12 +3128,16 @@ async function analyseGame(){S.expl=null;
     if(S.replay){S.ply=i;S.animMs=110;renderBoard();renderPlayers()}
     let ev=terminalEval(fen);
     if(!ev){
-      const r=await eng.analyse(fen,depth,2);
+      const r=await eng.analyse(fen,depth,1);
       if(token!==S.anaToken||!r)return;
       ev=toEv(fen,r);
     }
     S.ana.evals[i]=ev;
-    if(i>0){const prev=S.ana.moves[i-2];S.ana.moves[i-1]=classify(g,S.ana.evals,i-1,prev&&prev.cls)}
+    if(i>0){
+      const m=g.moves[i-1],pe=S.ana.evals[i-1];
+      if(pe&&pe.secondWp==null&&pe.bestUci===m.uci&&m.legal>1&&i-1>=g.bookUntil){const w=wpMover(pe,m.color);
+        if(w>=0.4&&w<0.97){const r2=await eng.analyse(g.fens[i-1],depth,2);if(token!==S.anaToken)return;if(r2)S.ana.evals[i-1]=toEv(g.fens[i-1],r2)}}
+      const prev=S.ana.moves[i-2];S.ana.moves[i-1]=classify(g,S.ana.evals,i-1,prev&&prev.cls)}
     $("#anaStatus").innerHTML=`<span class="spin"></span>Analyse du coup ${i} sur ${N-1}…`;
     $("#anaBar").style.width=(100*(i+1)/N)+"%";
     if(S.replay){renderBoard();renderEvalBar()}
@@ -3634,8 +3638,8 @@ function sbStatus(){
   else if(c.insufficient_material())txt="Matériel insuffisant : partie nulle.";
   else if(c.in_threefold_repetition())txt="Triple répétition : partie nulle.";
   else if(c.in_draw())txt="Règle des 50 coups : partie nulle.";
-  else txt=`Trait aux ${side}${c.in_check()?" (échec)":""}.`+(S.ply===0?" Clique ou fais glisser une pièce pour jouer.":"");
-  if(S.ply<S.sb.sans.length)txt+=` Tu regardes le coup ${S.ply} sur ${S.sb.sans.length}.`;
+  else txt=`Trait aux ${side}${c.in_check()?" (échec)":""}`;
+  if(S.ply<S.sb.sans.length)txt+=` · coup ${S.ply} sur ${S.sb.sans.length}`;
   $("#sbStatus").textContent=txt;
   $("#sbAnalyse").disabled=S.sb.sans.length<2;$("#sbUndo").disabled=S.ply===0;
 }
