@@ -3095,7 +3095,7 @@ function explainNow(m,info,before,after,ply,prevTo){
   return out.filter(Boolean);
 }
 
-async function analyseGame(){S.seenBest={};S.expl=null;
+async function analyseGame(){S.expl=null;
   const g=S.game,token=++S.anaToken,depth=+$("#depth").value;
   setLevel(g);
   S.ana={evals:[],moves:[],done:false,depth};S.var=null;S.inVar=false;S.retry=null;stopAuto();
@@ -3382,10 +3382,9 @@ const sideName=c=>c==="w"?"Blancs":"Noirs";
 function viewKey(){return S.inVar&&S.var?"v"+S.var.base+":"+S.vi:"p"+S.ply}
 function toggleExplain(){S.expl=S.expl===viewKey()?null:viewKey();renderCoach()}
 function setCoach(html,bar){$("#coach").innerHTML=html;$("#cbar").innerHTML=(bar||[]).join("");$("#cbar").className="cbar n"+(bar||[]).length}
-S.seenBest=S.seenBest||{};
 function renderCoach(){
   const g=S.game,a=S.ana,R=S.retry,v=curView();
-  const nextBtn=go=>cbtn("next","Suivant","next",go);
+  const nextBtn=()=>cbtn("next","Suivant","next",true);
   const open=S.expl===viewKey();
   if(R){
     if(R.state==="wait")return setCoach(bubble("Réessaie",`<p>${R.tries?"Ce n'est pas encore ça. Essaie un autre coup.":`Trouve un meilleur coup que <b>${esc(frSan(R.san))}</b> pour les ${sideName(R.color)}.`}</p>`),
@@ -3406,7 +3405,7 @@ function renderCoach(){
     return setCoach(bubble(moveHead(m,info,v.ev),body),[cbtn("explain","Expliquer","explain"),bad?cbtn("best","Meilleur","best"):"",resume].filter(Boolean));
   }
   const ply=S.ply;
-  if(ply===0)return setCoach(bubble(`<span class="ht">C'est parti !</span>`,`<p>Clique sur Suivant pour aller de moment clé en moment clé.</p>`),[nextBtn(true)]);
+  if(ply===0)return setCoach(bubble(`<span class="ht">C'est parti !</span>`,`<p>Clique sur Suivant pour aller de moment clé en moment clé.</p>`),[nextBtn()]);
   const m=g.moves[ply-1],mv=a&&a.moves[ply-1],e=a&&a.evals[ply];
   if(!mv)return setCoach(bubble(`${moveNo(ply-1)} ${figSan(m.san,m.color,true)}`,`<p><span class="spin"></span>En attente de l'analyse…</p>`),[]);
   const lastBook=mv.cls==="book"&&ply===g.bookUntil&&g.opening;
@@ -3414,9 +3413,9 @@ function renderCoach(){
   const body=(open?`<p>${comment(m,mv,a.evals[ply-1],e,ply,ply>1?g.moves[ply-2].to:null)}</p>`:"")+card+mateCard(ply);
   let btns;
   if(!a.done)btns=[];
-  else if(mv.cls==="book"||mv.cls==="forced")btns=[nextBtn(true)];
-  else if(BAD_CLS.includes(mv.cls))btns=[cbtn("explain","Expliquer","explain"),cbtn("best","Meilleur","best"),nextBtn(!!S.seenBest[ply])];
-  else btns=[cbtn("explain","Expliquer","explain"),nextBtn(true)];
+  else if(mv.cls==="book"||mv.cls==="forced")btns=[nextBtn()];
+  else if(BAD_CLS.includes(mv.cls))btns=[cbtn("explain","Expliquer","explain"),cbtn("best","Meilleur","best"),nextBtn()];
+  else btns=[cbtn("explain","Expliquer","explain"),nextBtn()];
   setCoach(bubble(moveHead(m,mv,e),body),btns);
 }
 const MATE_MAX=5;
@@ -3432,7 +3431,6 @@ function mateCard(ply){const L=mateLine(ply);if(!L)return"";
   return `<div class="matecard"><b>${L.found?"Mat en "+L.n+" trouvé":"Il y avait un mat en "+L.n}</b><div class="ml">${mv}</div></div>`}
 function playMate(k){stopAuto();const ply=S.inVar&&S.var&&S.var.kind==="mate"?S.var.base+1:S.ply,L=mateLine(ply);if(!L)return;
   S.retry=null;S.inVar=false;S.var=null;S.ply=ply-1;branchWith(L.ms,null,"mate");S.vi=k+1;renderAll()}
-function showBestTracked(){if(!S.inVar&&S.ply>0)S.seenBest[S.ply]=true;showBest()}
 function resumeGame(){stopAuto();const V=S.var;S.retry=null;
   if(V&&V.kind!=="user"){S.inVar=false;S.ply=Math.min(S.game.fens.length-1,V.base+1);S.sel=null;renderAll();return}
   exitVar()}
@@ -3483,7 +3481,7 @@ function varRow(){
   return `<div class="vrow">${parts.join("")}<button class="vclose" data-close="1" type="button" aria-label="Fermer la variante">×</button></div>`;
 }
 
-const COACH_ACTS={best:showBestTracked,retry:startRetry,follow:showFollow,back:exitVar,solution:showBest,cancel:cancelRetry,continue:continueRetry,next:nextKey,explain:toggleExplain,resume:resumeGame};
+const COACH_ACTS={best:showBest,retry:startRetry,follow:showFollow,back:exitVar,solution:showBest,cancel:cancelRetry,continue:continueRetry,next:nextKey,explain:toggleExplain,resume:resumeGame};
 for(const id of ["#coach","#cbar"])$(id).addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)COACH_ACTS[b.dataset.act]()});
 $("#coach").addEventListener("click",e=>{const b=e.target.closest("[data-mate]");if(b)playMate(+b.dataset.mate)});
 $("#lines").addEventListener("click",e=>{const b=e.target.closest(".line[data-k]");if(b)playLine(+b.dataset.k)});
