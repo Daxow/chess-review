@@ -2872,7 +2872,10 @@ class Engine{
         this.q=this.q.filter(j=>{if(j.live){j.res(null);return false}return true});
         if(this.cur&&this.cur.live&&!this.cur.aborted){this.cur.aborted=true;this.send("stop")}
       }
-      this.q.push({fen,depth,mpv,live,res});this.pump();
+      else if(this.cur&&this.cur.live&&!this.cur.aborted){this.cur.aborted=true;this.send("stop")}
+      if(live)this.q.push({fen,depth,mpv,live,res});
+      else{const i=this.q.findIndex(j=>j.live);if(i<0)this.q.push({fen,depth,mpv,live,res});else this.q.splice(i,0,{fen,depth,mpv,live,res})}
+      this.pump();
     });
   }
   stop(){for(const j of this.q)j.res(null);this.q=[];if(this.cur&&!this.cur.aborted){this.cur.aborted=true;this.send("stop")}}
@@ -3278,22 +3281,25 @@ function posKey(fen){return ((S.ana&&S.ana.depth)||15)+"|"+fen}
 function toEv(fen,r){const b=r.best,s=r.second;
   return {cp:b?b.cp:0,mate:b?b.mate:null,bestUci:r.bestmove,bestSan:uciToSan(fen,r.bestmove),pv:b?b.pv:[],
     secondCp:s?s.cp:null,secondMate:s?s.mate:null,secondWp:s?1:null,lines:r.lines}}
-function evalPos(fen,live){
-  const key=posKey(fen);
-  if(posCache.has(key))return Promise.resolve(posCache.get(key));
-  if(inflight.has(key))return inflight.get(key);
-  const t=terminalEval(fen);if(t){posCache.set(key,t);return Promise.resolve(t)}
-  const p=(async()=>{try{const eng=await startEngine();const r=await eng.analyse(fen,(S.ana&&S.ana.depth)||15,3,!!live);
-    if(!r)return null;const ev=toEv(fen,r);posCache.set(key,ev);return ev}catch(e){return null}})();
-  if(!live){inflight.set(key,p);p.finally(()=>inflight.delete(key))}
+function evalPos(fen,live,mpv=1){
+  const key=posKey(fen),c=posCache.get(key);
+  if(c&&(c.mpv||1)>=mpv)return Promise.resolve(c);
+  const f=inflight.get(key);
+  if(f&&f.mpv>=mpv)return live?f.p:f.p.then(ev=>ev||evalPos(fen,false,mpv));
+  const t=terminalEval(fen);if(t){t.mpv=99;posCache.set(key,t);return Promise.resolve(t)}
+  const p=(async()=>{try{const eng=await startEngine();const r=await eng.analyse(fen,(S.ana&&S.ana.depth)||15,mpv,!!live);
+    if(!r)return null;const ev=toEv(fen,r);ev.mpv=mpv;const old=posCache.get(key);if(!old||(old.mpv||1)<=mpv)posCache.set(key,ev);return ev}catch(e){return null}})();
+  const rec={p,mpv};inflight.set(key,rec);p.finally(()=>{if(inflight.get(key)===rec)inflight.delete(key)});
   return p;
 }
 let liveT=null;
 function liveAnalyse(){
   if(!reviewing())return;
+  const lines=!$("#vAnalysis").hidden;
+  if(!lines&&!(S.inVar&&S.var&&!S.var.evals[S.vi]))return;
   clearTimeout(liveT);
   liveT=setTimeout(()=>{const fen=curView().fen;
-    evalPos(fen,true).then(ev=>{if(!ev)return;
+    evalPos(fen,true,lines?3:1).then(ev=>{if(!ev)return;
       if(S.inVar&&S.var&&S.var.fens[S.vi]===fen&&!S.var.evals[S.vi]){S.var.evals[S.vi]=ev;renderEvalBar();renderBoard();if(!$("#vReview").hidden)renderCoach()}
       if(curView().fen===fen){renderLines();if(!$("#vAnalysis").hidden)renderFeedback()}})},120);
 }
